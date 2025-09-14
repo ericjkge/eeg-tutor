@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Theme, Button, Card, Text, Heading, TextField, TextArea, Select, Flex, Box, Grid, Badge, IconButton, Dialog } from '@radix-ui/themes'
 import { PlusIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons'
+import { FaCircleNodes } from 'react-icons/fa6'
+import { Welcome } from './components/Welcome'
+import { TrainingWizard } from './components/TrainingWizard'
 import './App.css'
 
 const API_BASE = 'http://localhost:8000'
 
 function App() {
+  const [currentPage, setCurrentPage] = useState('welcome')
   const [activeTab, setActiveTab] = useState('decks')
   const [decks, setDecks] = useState([])
   const [selectedDeck, setSelectedDeck] = useState(null)
@@ -96,17 +100,59 @@ function App() {
     setShowAnswer(!showAnswer)
   }
 
+  const handleGetStarted = () => {
+    setCurrentPage('training')
+  }
+
+  const handleTrainingComplete = () => {
+    setCurrentPage('main')
+  }
+
+  if (currentPage === 'welcome') {
+    return (
+      <Theme>
+        <Welcome onGetStarted={handleGetStarted} />
+      </Theme>
+    )
+  }
+
+  if (currentPage === 'training') {
+    return (
+      <Theme>
+        <TrainingWizard onComplete={handleTrainingComplete} onGoHome={() => setCurrentPage('welcome')} />
+      </Theme>
+    )
+  }
+
   return (
     <Theme>
-      <div className="app">
+      <div className="app" style={{ position: 'relative' }}>
+        {/* Persistent Synapse logo */}
+        <Box style={{ 
+          position: 'fixed', 
+          top: '2rem', 
+          left: '2rem',
+          zIndex: 1000
+        }}>
+          <Flex align="center" gap="2" style={{ cursor: 'pointer' }} onClick={() => setCurrentPage('welcome')}>
+            <FaCircleNodes 
+              size={24} 
+              style={{ color: 'var(--accent-9)' }}
+            />
+            <Heading 
+              size="6" 
+              style={{ 
+                color: 'var(--accent-9)',
+                fontWeight: 'bold'
+              }}
+            >
+              Synapse
+            </Heading>
+          </Flex>
+        </Box>
+
         <header className="header">
-          <Heading 
-            size="6" 
-            style={{ color: '#2563eb', cursor: 'pointer' }}
-            onClick={() => setActiveTab('decks')}
-          >
-            Synapse
-          </Heading>
+          <div></div> {/* Empty div to maintain header layout */}
           <nav className="nav-tabs">
             <Button 
               variant={activeTab === 'decks' ? 'solid' : 'soft'} 
@@ -146,12 +192,12 @@ function App() {
                 </Dialog.Trigger>
                 <Dialog.Content style={{ maxWidth: 450 }}>
                   <Dialog.Title>Create New Deck</Dialog.Title>
-                  <Dialog.Description size="2" mb="4">
+                  <Dialog.Description size="3" mb="4">
                     Add a new deck to organize your flashcards.
                   </Dialog.Description>
                   <Flex direction="column" gap="3">
                     <Box>
-                      <Text as="div" size="2" mb="1" weight="bold">
+                      <Text as="div" size="3" mb="1" weight="bold">
                         Deck Name
                       </Text>
                       <input
@@ -168,7 +214,7 @@ function App() {
                       />
                     </Box>
                     <Box>
-                      <Text as="div" size="2" mb="1" weight="bold">
+                      <Text as="div" size="3" mb="1" weight="bold">
                         Description
                       </Text>
                       <input
@@ -202,7 +248,7 @@ function App() {
                 <Card key={deck.id} size="2">
                   <Flex direction="column" gap="2">
                     <Heading size="4">{deck.name}</Heading>
-                    <Text color="gray" size="2">{deck.description}</Text>
+                    <Text color="gray" size="3">{deck.description}</Text>
                     <Badge variant="soft" size="1">
                       {deck.cards.length} cards
                     </Badge>
@@ -228,7 +274,7 @@ function App() {
               <Heading size="5" mb="4">Add New Card</Heading>
                <Flex direction="column" gap="4">
                  <Box>
-                   <Text as="div" size="2" mb="2" weight="bold">
+                   <Text as="div" size="3" mb="2" weight="bold">
                      Select Deck
                    </Text>
                    <Select.Root 
@@ -247,7 +293,7 @@ function App() {
                  </Box>
                  
                  <Box>
-                   <Text as="div" size="2" mb="2" weight="bold">
+                   <Text as="div" size="3" mb="2" weight="bold">
                      Front of Card
                    </Text>
                    <TextArea
@@ -259,7 +305,7 @@ function App() {
                  </Box>
                  
                  <Box>
-                   <Text as="div" size="2" mb="2" weight="bold">
+                   <Text as="div" size="3" mb="2" weight="bold">
                      Back of Card
                    </Text>
                    <TextArea
@@ -285,13 +331,13 @@ function App() {
             <Grid columns="3" gap="4" width="auto">
               <Card size="3">
                 <Flex direction="column" align="center" gap="2">
-                  <Text size="2" color="gray" weight="medium">Total Decks</Text>
+                  <Text size="3" color="gray" weight="medium">Total Decks</Text>
                   <Heading size="8" color="blue">{decks.length}</Heading>
                 </Flex>
               </Card>
               <Card size="3">
                 <Flex direction="column" align="center" gap="2">
-                  <Text size="2" color="gray" weight="medium">Total Cards</Text>
+                  <Text size="3" color="gray" weight="medium">Total Cards</Text>
                   <Heading size="8" color="blue">
                     {decks.reduce((total, deck) => total + deck.cards.length, 0)}
                   </Heading>
@@ -299,7 +345,7 @@ function App() {
               </Card>
               <Card size="3">
                 <Flex direction="column" align="center" gap="2">
-                  <Text size="2" color="gray" weight="medium">Cards Studied Today</Text>
+                  <Text size="3" color="gray" weight="medium">Cards Studied Today</Text>
                   <Heading size="8" color="blue">0</Heading>
                 </Flex>
               </Card>
@@ -312,7 +358,7 @@ function App() {
             <Flex justify="between" align="center" mb="4">
               <Heading size="5">{selectedDeck.name}</Heading>
               <Flex align="center" gap="4">
-                <Text size="2" color="gray">
+                <Text size="3" color="gray">
                   Card {cardIndex + 1} of {selectedDeck.cards.length}
                 </Text>
                 <Button variant="soft" onClick={() => setActiveTab('decks')}>
@@ -369,7 +415,7 @@ function App() {
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Text color="gray" style={{ fontStyle: 'italic' }}>
+                <Text size="3" color="gray" style={{ fontStyle: 'italic' }}>
                   EEG visualization will go here
                 </Text>
               </Box>

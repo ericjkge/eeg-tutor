@@ -1,5 +1,5 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Instrument Serif', system-ui, Avenir, Helvetica, Arial, serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -11,6 +11,33 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apply Instrument Serif globally with larger base font size */
+* {
+  font-family: 'Instrument Serif', serif !important;
+}
+
+/* Increase base font sizes for better readability */
+body {
+  font-size: 16px;
+}
+
+/* Radix UI overrides for larger text */
+.rt-Text[data-size="1"] {
+  font-size: 14px !important;
+}
+
+.rt-Text[data-size="2"] {
+  font-size: 16px !important;
+}
+
+.rt-Text[data-size="3"] {
+  font-size: 18px !important;
+}
+
+.rt-Button {
+  font-size: 16px !important;
 }
 
 a {
