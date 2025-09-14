@@ -74,9 +74,9 @@ function ConnectStage({ onNext }) {
               <>
                 <FaCircleCheck 
                   size={60} 
-                  style={{ color: 'var(--green-9)' }}
+                  style={{ color: 'var(--accent-9)' }}
                 />
-                <Text size="4" weight="medium" color="green">Device Connected!</Text>
+                <Text size="4" weight="medium" style={{ color: 'var(--accent-9)' }}>Device Connected!</Text>
                 <Text size="2" color="gray" style={{ textAlign: 'center' }}>
                   Sample Rate: {connectionStatus?.sample_rate || 0} Hz<br/>
                   Data Points: {connectionStatus?.data_count || 0}
@@ -84,7 +84,59 @@ function ConnectStage({ onNext }) {
               </>
               ) : (
                 <>
-                  <Spinner size="3" />
+                  <Box style={{ position: 'relative', width: '100px', height: '100px' }}>
+                    {/* Core circle */}
+                    <Box style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '16px',
+                      height: '16px',
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--accent-9)',
+                    }} />
+                    
+                    {/* Pulsing rings */}
+                    <Box style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '50%',
+                      border: '3px solid var(--accent-9)',
+                      animation: 'pulse-ring 2.5s infinite',
+                      animationDelay: '0s'
+                    }} />
+                    
+                    <Box style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '50%',
+                      border: '3px solid var(--accent-9)',
+                      animation: 'pulse-ring 2.5s infinite',
+                      animationDelay: '-0.8s'
+                    }} />
+                    
+                    <Box style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '30px',
+                      height: '30px',
+                      borderRadius: '50%',
+                      border: '3px solid var(--accent-9)',
+                      animation: 'pulse-ring 2.5s infinite',
+                      animationDelay: '-1.6s'
+                    }} />
+                  </Box>
                   <Text size="4" weight="medium" color="gray">Waiting for EEG device...</Text>
                   <Text size="2" color="gray" style={{ textAlign: 'center' }}>
                     Make sure your Muse streaming app is<br/>
