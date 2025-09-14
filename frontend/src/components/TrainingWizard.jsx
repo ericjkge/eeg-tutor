@@ -634,10 +634,6 @@ function TrainStage({ onNext, onPrev }) {
                 }} />
               </Box>
               <Text size="4" weight="medium" style={{ color: 'var(--accent-9)' }}>Training Model...</Text>
-              <Text size="3" color="gray" style={{ textAlign: 'center' }}>
-                Analyzing your brainwave patterns and<br/>
-                learning to predict cognitive load levels
-              </Text>
             </Flex>
           </Card>
         )}

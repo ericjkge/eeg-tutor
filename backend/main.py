@@ -5,7 +5,12 @@ from typing import List, Optional
 import json
 import os
 from eeg_service import eeg_service
-from database import get_db_connection, save_eeg_sample
+from database import (
+    get_db_connection, save_eeg_sample, init_database, init_sample_data,
+    create_deck, get_decks, get_deck, delete_deck,
+    create_card, get_card, delete_card, update_card_review_data,
+    get_or_create_study_session, record_card_review, get_daily_study_stats, get_study_history
+)
 from ml_service import cognitive_load_predictor
 import uuid
 import time
@@ -46,36 +51,14 @@ class CreateDeck(BaseModel):
     name: str
     description: Optional[str] = ""
 
-# Simple in-memory storage for now
-decks_data = []
-cards_data = []
-next_deck_id = 1
-next_card_id = 1
+class CardReview(BaseModel):
+    card_id: int
+    deck_id: int
+    response_time_seconds: Optional[float] = None
+    difficulty_rating: Optional[int] = None
 
-# Initialize flashcards with sample data
-def init_sample_data():
-    global next_deck_id, next_card_id, decks_data, cards_data
-    
-    # Sample deck
-    sample_deck = Deck(
-        id=next_deck_id,
-        name="Spanish Vocabulary",
-        description="Basic Spanish words"
-    )
-    decks_data.append(sample_deck.model_dump())
-    next_deck_id += 1
-    
-    # Sample cards
-    sample_cards = [
-        Card(id=next_card_id, front="Hello", back="Hola", deck_id=1),
-        Card(id=next_card_id + 1, front="Goodbye", back="Adiós", deck_id=1),
-        Card(id=next_card_id + 2, front="Thank you", back="Gracias", deck_id=1),
-    ]
-    
-    for card in sample_cards:
-        cards_data.append(card.model_dump())
-        next_card_id += 1
-
+# Initialize database and sample data
+init_database()
 init_sample_data()
 
 # API Routes
@@ -84,70 +67,203 @@ async def root():
     return {"message": "Synapse API is running"}
 
 @app.get("/decks", response_model=List[Deck])
-async def get_decks():
-    # Attach cards to decks
-    result = []
-    for deck_data in decks_data:
-        deck = Deck(**deck_data)
-        deck.cards = [Card(**card) for card in cards_data if card["deck_id"] == deck.id]
-        result.append(deck)
-    return result
+async def get_decks_endpoint():
+    """Get all decks with their cards"""
+    try:
+        decks_data = get_decks()
+        result = []
+        for deck_data in decks_data:
+            # Convert to Pydantic model
+            deck = Deck(**deck_data)
+            # Cards are already included in deck_data from database function
+            result.append(deck)
+        return result
+    except Exception as e:
+        print(f"❌ Error in get_decks endpoint: {e}")
+        return []
 
 @app.get("/decks/{deck_id}", response_model=Deck)
-async def get_deck(deck_id: int):
-    deck_data = next((d for d in decks_data if d["id"] == deck_id), None)
-    if not deck_data:
-        return {"error": "Deck not found"}
-    
-    deck = Deck(**deck_data)
-    deck.cards = [Card(**card) for card in cards_data if card["deck_id"] == deck_id]
-    return deck
+async def get_deck_endpoint(deck_id: int):
+    """Get a specific deck with its cards"""
+    try:
+        deck_data = get_deck(deck_id)
+        if not deck_data:
+            return {"error": "Deck not found"}
+        
+        return Deck(**deck_data)
+    except Exception as e:
+        print(f"❌ Error in get_deck endpoint: {e}")
+        return {"error": "Failed to get deck"}
 
 @app.post("/decks", response_model=Deck)
-async def create_deck(deck: CreateDeck):
-    global next_deck_id
-    new_deck = Deck(
-        id=next_deck_id,
-        name=deck.name,
-        description=deck.description,
-        cards=[]
-    )
-    decks_data.append(new_deck.model_dump())
-    next_deck_id += 1
-    return new_deck
+async def create_deck_endpoint(deck: CreateDeck):
+    """Create a new deck"""
+    try:
+        deck_id = create_deck(deck.name, deck.description)
+        if not deck_id:
+            return {"error": "Failed to create deck"}
+        
+        # Get the created deck with empty cards list
+        new_deck = Deck(
+            id=deck_id,
+            name=deck.name,
+            description=deck.description,
+            cards=[]
+        )
+        return new_deck
+    except Exception as e:
+        print(f"❌ Error in create_deck endpoint: {e}")
+        return {"error": "Failed to create deck"}
 
 @app.post("/cards", response_model=Card)
-async def create_card(card: CreateCard):
-    global next_card_id
-    new_card = Card(
-        id=next_card_id,
-        front=card.front,
-        back=card.back,
-        deck_id=card.deck_id
-    )
-    cards_data.append(new_card.model_dump())
-    next_card_id += 1
-    return new_card
+async def create_card_endpoint(card: CreateCard):
+    """Create a new card"""
+    try:
+        card_id = create_card(card.deck_id, card.front, card.back)
+        if not card_id:
+            return {"error": "Failed to create card"}
+        
+        # Get the created card
+        card_data = get_card(card_id)
+        if not card_data:
+            return {"error": "Failed to retrieve created card"}
+        
+        return Card(**card_data)
+    except Exception as e:
+        print(f"❌ Error in create_card endpoint: {e}")
+        return {"error": "Failed to create card"}
 
 @app.get("/cards/{card_id}", response_model=Card)
-async def get_card(card_id: int):
-    card_data = next((c for c in cards_data if c["id"] == card_id), None)
-    if not card_data:
-        return {"error": "Card not found"}
-    return Card(**card_data)
+async def get_card_endpoint(card_id: int):
+    """Get a specific card"""
+    try:
+        card_data = get_card(card_id)
+        if not card_data:
+            return {"error": "Card not found"}
+        return Card(**card_data)
+    except Exception as e:
+        print(f"❌ Error in get_card endpoint: {e}")
+        return {"error": "Failed to get card"}
 
 @app.delete("/cards/{card_id}")
-async def delete_card(card_id: int):
-    global cards_data
-    cards_data = [c for c in cards_data if c["id"] != card_id]
-    return {"message": "Card deleted"}
+async def delete_card_endpoint(card_id: int):
+    """Delete a card"""
+    try:
+        success = delete_card(card_id)
+        if success:
+            return {"message": "Card deleted"}
+        else:
+            return {"error": "Failed to delete card"}
+    except Exception as e:
+        print(f"❌ Error in delete_card endpoint: {e}")
+        return {"error": "Failed to delete card"}
 
 @app.delete("/decks/{deck_id}")
-async def delete_deck(deck_id: int):
-    global decks_data, cards_data
-    decks_data = [d for d in decks_data if d["id"] != deck_id]
-    cards_data = [c for c in cards_data if c["deck_id"] != deck_id]
-    return {"message": "Deck deleted"}
+async def delete_deck_endpoint(deck_id: int):
+    """Delete a deck and all its cards"""
+    try:
+        success = delete_deck(deck_id)
+        if success:
+            return {"message": "Deck deleted"}
+        else:
+            return {"error": "Failed to delete deck"}
+    except Exception as e:
+        print(f"❌ Error in delete_deck endpoint: {e}")
+        return {"error": "Failed to delete deck"}
+
+# Study Session Tracking Endpoints
+@app.post("/study/start")
+async def start_study_session(deck_id: int):
+    """Start or get existing study session for a deck"""
+    try:
+        session_id = get_or_create_study_session(deck_id)
+        if session_id:
+            return {
+                "success": True,
+                "session_id": session_id,
+                "message": "Study session ready"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to create study session"
+            }
+    except Exception as e:
+        print(f"❌ Error starting study session: {e}")
+        return {
+            "success": False,
+            "error": "Failed to start study session"
+        }
+
+@app.post("/study/review")
+async def record_review(review: CardReview):
+    """Record that a card was reviewed"""
+    try:
+        # Get or create study session for the deck
+        session_id = get_or_create_study_session(review.deck_id)
+        if not session_id:
+            return {
+                "success": False,
+                "error": "Failed to get study session"
+            }
+        
+        # Record the card review
+        success = record_card_review(
+            session_id, 
+            review.card_id, 
+            review.response_time_seconds, 
+            review.difficulty_rating
+        )
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Card review recorded"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to record card review"
+            }
+            
+    except Exception as e:
+        print(f"❌ Error recording card review: {e}")
+        return {
+            "success": False,
+            "error": "Failed to record card review"
+        }
+
+@app.get("/study/stats")
+async def get_study_stats(date: Optional[str] = None):
+    """Get study statistics for a date (defaults to today)"""
+    try:
+        stats = get_daily_study_stats(date)
+        return {
+            "success": True,
+            "stats": stats
+        }
+    except Exception as e:
+        print(f"❌ Error getting study stats: {e}")
+        return {
+            "success": False,
+            "error": "Failed to get study stats"
+        }
+
+@app.get("/study/history")
+async def get_study_history_endpoint(days: int = 7):
+    """Get study history for the last N days"""
+    try:
+        history = get_study_history(days)
+        return {
+            "success": True,
+            "history": history
+        }
+    except Exception as e:
+        print(f"❌ Error getting study history: {e}")
+        return {
+            "success": False,
+            "error": "Failed to get study history"
+        }
 
 # Calibration Endpoints
 @app.get("/calibration/tests")
@@ -296,6 +412,11 @@ async def get_eeg_data(seconds: float = 1.0):
         "data": eeg_service.get_live_data(seconds),
         "status": eeg_service.get_connection_status()
     }
+
+@app.get("/eeg/fft")
+async def get_eeg_fft(window_seconds: float = 1.0):
+    """Get FFT-processed EEG data for frequency visualization"""
+    return eeg_service.get_fft_data(window_seconds)
 
 @app.post("/eeg/start")
 async def start_eeg_service():

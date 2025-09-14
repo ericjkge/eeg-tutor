@@ -4,6 +4,7 @@ import { PlusIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons'
 import { SiAmazonluna } from 'react-icons/si'
 import { Welcome } from './components/Welcome'
 import { TrainingWizard } from './components/TrainingWizard'
+import { EEGVisualization } from './components/EEGVisualization'
 import './App.css'
 
 const API_BASE = 'http://localhost:8000'
@@ -19,11 +20,47 @@ function App() {
   const [newDeck, setNewDeck] = useState({ name: '', description: '' })
   const [newCard, setNewCard] = useState({ front: '', back: '', deck_id: 1 })
   const [showCreateDeckForm, setShowCreateDeckForm] = useState(false)
+  const [cardStartTime, setCardStartTime] = useState(null)
+  const [studyStats, setStudyStats] = useState({ total_cards_studied: 0 })
 
-  // Fetch decks on component mount
+  // Fetch decks and study stats on component mount
   useEffect(() => {
     fetchDecks()
+    fetchStudyStats()
   }, [])
+
+  const fetchStudyStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/study/stats`)
+      const data = await response.json()
+      if (data.success) {
+        setStudyStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Failed to fetch study stats:', error)
+    }
+  }
+
+  const recordCardReview = async (cardId, deckId, responseTime) => {
+    try {
+      const response = await fetch(`${API_BASE}/study/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: cardId,
+          deck_id: deckId,
+          response_time_seconds: responseTime
+        })
+      })
+      const data = await response.json()
+      if (data.success) {
+        // Refresh study stats after recording review
+        fetchStudyStats()
+      }
+    } catch (error) {
+      console.error('Failed to record card review:', error)
+    }
+  }
 
   const fetchDecks = async () => {
     try {
@@ -76,15 +113,23 @@ function App() {
     setCurrentCard(deck.cards[0] || null)
     setShowAnswer(false)
     setActiveTab('study')
+    setCardStartTime(Date.now()) // Start timing the first card
   }
 
-  const nextCard = () => {
+  const nextCard = async () => {
     if (!selectedDeck || !selectedDeck.cards) return
+    
+    // Record the current card review if we have timing data
+    if (currentCard && cardStartTime) {
+      const responseTime = (Date.now() - cardStartTime) / 1000 // Convert to seconds
+      await recordCardReview(currentCard.id, selectedDeck.id, responseTime)
+    }
     
     const nextIndex = (cardIndex + 1) % selectedDeck.cards.length
     setCardIndex(nextIndex)
     setCurrentCard(selectedDeck.cards[nextIndex])
     setShowAnswer(false)
+    setCardStartTime(Date.now()) // Start timing the new card
   }
 
   const prevCard = () => {
@@ -94,6 +139,7 @@ function App() {
     setCardIndex(prevIndex)
     setCurrentCard(selectedDeck.cards[prevIndex])
     setShowAnswer(false)
+    setCardStartTime(Date.now()) // Reset timing for the previous card
   }
 
   const flipCard = () => {
@@ -119,7 +165,7 @@ function App() {
   if (currentPage === 'training') {
     return (
       <Theme>
-        <TrainingWizard onComplete={handleTrainingComplete} onGoHome={() => setCurrentPage('welcome')} />
+        <TrainingWizard onComplete={handleTrainingComplete} onGoHome={() => { setCurrentPage('main'); setActiveTab('decks'); }} />
       </Theme>
     )
   }
@@ -134,7 +180,7 @@ function App() {
           left: '2rem',
           zIndex: 1000
         }}>
-          <Flex align="center" gap="2" style={{ cursor: 'pointer' }} onClick={() => setCurrentPage('welcome')}>
+          <Flex align="center" gap="2" style={{ cursor: 'pointer' }} onClick={() => { setCurrentPage('main'); setActiveTab('decks'); }}>
             <SiAmazonluna 
               size={24} 
               style={{ color: 'var(--accent-9)' }}
@@ -346,7 +392,7 @@ function App() {
               <Card size="3">
                 <Flex direction="column" align="center" gap="2">
                   <Text size="3" color="gray" weight="medium">Cards Studied Today</Text>
-                  <Heading size="8" color="blue">0</Heading>
+                  <Heading size="8" color="blue">{studyStats?.total_cards_studied || 0}</Heading>
                 </Flex>
               </Card>
             </Grid>
@@ -404,22 +450,10 @@ function App() {
                </Flex>
              </Flex>
 
-            {/* Placeholder for EEG visualization */}
-            <Card size="3" mt="6">
-              <Heading size="4" mb="3">Brain Activity</Heading>
-              <Box style={{ 
-                height: 200, 
-                backgroundColor: 'var(--gray-3)', 
-                borderRadius: 'var(--radius-2)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Text size="3" color="gray" style={{ fontStyle: 'italic' }}>
-                  EEG visualization will go here
-                </Text>
-              </Box>
-            </Card>
+            {/* Live EEG visualization */}
+            <Box mt="6">
+              <EEGVisualization isStudying={true} />
+            </Box>
           </Box>
         )}
       </main>

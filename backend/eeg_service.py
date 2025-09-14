@@ -186,6 +186,98 @@ class EEGService:
             if sample['timestamp'] >= cutoff_time
         ]
     
+    def get_fft_data(self, window_seconds: float = 1.0) -> Dict[str, Any]:
+        """Get FFT-processed EEG data for frequency analysis"""
+        if not self.recent_data:
+            return {
+                'success': False,
+                'message': 'No EEG data available',
+                'data': {}
+            }
+        
+        # Get data from the last window
+        current_time = time.time()
+        cutoff_time = current_time - window_seconds
+        
+        window_data = [
+            sample for sample in self.recent_data
+            if sample['timestamp'] >= cutoff_time
+        ]
+        
+        if len(window_data) < 32:  # Need minimum samples for meaningful FFT
+            return {
+                'success': False,
+                'message': f'Insufficient data: {len(window_data)} samples (need at least 32)',
+                'data': {}
+            }
+        
+        try:
+            # Extract channel data
+            channels = {
+                'tp9': [s['tp9'] for s in window_data],
+                'af7': [s['af7'] for s in window_data],
+                'af8': [s['af8'] for s in window_data],
+                'tp10': [s['tp10'] for s in window_data]
+            }
+            
+            # Process each channel
+            fft_result = {}
+            actual_sample_rate = len(window_data) / window_seconds
+            
+            for channel, values in channels.items():
+                # Apply window function to reduce spectral leakage
+                windowed = np.array(values) * np.hanning(len(values))
+                
+                # Compute FFT
+                fft = np.fft.rfft(windowed)
+                freqs = np.fft.rfftfreq(len(windowed), 1.0 / actual_sample_rate)
+                
+                # Compute power spectral density
+                psd = np.abs(fft) ** 2
+                
+                # Define EEG frequency bands
+                bands = {
+                    'delta': (0.5, 4),    # Deep sleep
+                    'theta': (4, 8),      # Drowsiness, meditation
+                    'alpha': (8, 12),     # Relaxed awareness
+                    'beta': (12, 30),     # Active concentration
+                    'gamma': (30, 100)    # High-level cognitive functioning
+                }
+                
+                # Calculate band powers
+                band_powers = {}
+                for band_name, (low, high) in bands.items():
+                    band_mask = (freqs >= low) & (freqs <= high)
+                    if np.any(band_mask):
+                        band_powers[band_name] = float(np.mean(psd[band_mask]))
+                    else:
+                        band_powers[band_name] = 0.0
+                
+                fft_result[channel] = {
+                    'frequencies': freqs[:50].tolist(),  # Limit to first 50 Hz for visualization
+                    'power_spectrum': psd[:50].tolist(),
+                    'band_powers': band_powers,
+                    'total_power': float(np.sum(psd))
+                }
+            
+            return {
+                'success': True,
+                'data': fft_result,
+                'metadata': {
+                    'window_seconds': window_seconds,
+                    'samples_used': len(window_data),
+                    'actual_sample_rate': actual_sample_rate,
+                    'timestamp': current_time
+                }
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'message': f'FFT processing error: {str(e)}',
+                'data': {}
+            }
+    
 
     def get_latest_sample(self) -> Optional[Dict[str, Any]]:
         """Return the average of the most recent 10 EEG samples, if any."""
