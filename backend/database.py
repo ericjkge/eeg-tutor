@@ -191,7 +191,7 @@ def create_deck(name: str, description: str = "") -> Optional[int]:
         return None
 
 def get_decks() -> List[Dict[str, Any]]:
-    """Get all decks with their cards"""
+    """Get all decks with their cards and next study dates"""
     try:
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -200,10 +200,26 @@ def get_decks() -> List[Dict[str, Any]]:
             cursor.execute("SELECT * FROM decks ORDER BY created_at DESC")
             decks = [dict(row) for row in cursor.fetchall()]
             
-            # Get cards for each deck
+            # Get cards for each deck and calculate next study date
             for deck in decks:
                 cursor.execute("SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at ASC", (deck['id'],))
                 deck['cards'] = [dict(row) for row in cursor.fetchall()]
+                
+                # Find the most recent next_review date for this deck
+                cursor.execute("""
+                    SELECT next_review 
+                    FROM cards 
+                    WHERE deck_id = ? AND next_review IS NOT NULL 
+                    ORDER BY next_review ASC 
+                    LIMIT 1
+                """, (deck['id'],))
+                
+                next_review_row = cursor.fetchone()
+                if next_review_row:
+                    deck['next_study_date'] = next_review_row['next_review']
+                else:
+                    # If no cards have next_review set, deck is ready to study
+                    deck['next_study_date'] = None
             
             return decks
     except Exception as e:

@@ -25,7 +25,7 @@ ChartJS.register(
 
 const API_BASE = 'http://localhost:8000';
 
-export function EEGVisualization({ isStudying = false, currentCard = null, studyStats = { total_cards_studied: 0 } }) {
+export function EEGVisualization({ isStudying = false, currentCard = null, studyStats = { total_cards_studied: 0 }, lastCognitiveLoad = null }) {
   const [eegData, setEegData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [isLoading, setIsLoading] = useState(true);
@@ -113,6 +113,15 @@ export function EEGVisualization({ isStudying = false, currentCard = null, study
       return `${diffDays}d`;
     } catch (error) {
       return 'Unknown';
+    }
+  };
+
+  const getCognitiveLoadColor = (difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'easy': return 'green';
+      case 'medium': return 'orange';
+      case 'hard': return 'red';
+      default: return 'gray';
     }
   };
 
@@ -301,9 +310,15 @@ export function EEGVisualization({ isStudying = false, currentCard = null, study
               <Card size="2" style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Flex align="center" gap="2">
                   <Text size="2" color="gray">Cognitive Load:</Text>
-                  <Badge color="orange" variant="soft" size="2">
-                    Medium
-                  </Badge>
+                  {lastCognitiveLoad ? (
+                    <Badge color={getCognitiveLoadColor(lastCognitiveLoad.difficulty_label)} variant="soft" size="2">
+                      {lastCognitiveLoad.difficulty_label}
+                    </Badge>
+                  ) : (
+                    <Badge color="gray" variant="soft" size="2">
+                      Analyzing...
+                    </Badge>
+                  )}
                 </Flex>
               </Card>
 

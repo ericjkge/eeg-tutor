@@ -22,6 +22,7 @@ function App() {
   const [showCreateDeckForm, setShowCreateDeckForm] = useState(false)
   const [cardStartTime, setCardStartTime] = useState(null)
   const [studyStats, setStudyStats] = useState({ total_cards_studied: 0 })
+  const [lastCognitiveLoad, setLastCognitiveLoad] = useState(null)
 
   // Fetch decks and study stats on component mount
   useEffect(() => {
@@ -133,9 +134,10 @@ function App() {
         
         if (cogLoadData.success) {
           console.log('🧠 Cognitive load prediction:', cogLoadData.prediction);
-          // TODO: Store this prediction to show on next card
+          setLastCognitiveLoad(cogLoadData.prediction);
         } else {
           console.log('⚠️ Could not predict cognitive load:', cogLoadData.message);
+          setLastCognitiveLoad(null);
         }
       } catch (error) {
         console.error('❌ Error getting cognitive load prediction:', error);
@@ -169,6 +171,24 @@ function App() {
 
   const handleTrainingComplete = () => {
     setCurrentPage('main')
+  }
+
+  const getStudyDateLabel = (deck) => {
+    // Hardcoded randomized dates for now
+    const randomLabels = ['Today', 'Tomorrow', '3d', '1w', 'Ready', 'Overdue'];
+    const deckIndex = deck.id % randomLabels.length;
+    return randomLabels[deckIndex];
+  }
+
+  const getStudyDateColor = (deck) => {
+    const label = getStudyDateLabel(deck);
+    switch (label) {
+      case 'Overdue': return 'red';
+      case 'Today': return 'orange';
+      case 'Ready': return 'green';
+      case 'Tomorrow': return 'yellow';
+      default: return 'gray';
+    }
   }
 
   if (currentPage === 'welcome') {
@@ -308,8 +328,25 @@ function App() {
             
             <Grid columns="3" gap="4" width="auto">
               {decks.map(deck => (
-                <Card key={deck.id} size="2">
+                <Card key={deck.id} size="2" style={{ position: 'relative' }}>
                   <Flex direction="column" gap="2">
+                    {/* Study date label in upper right */}
+                    {getStudyDateLabel(deck) && (
+                      <Badge 
+                        color={getStudyDateColor(deck)} 
+                        variant="soft" 
+                        size="1"
+                        style={{ 
+                          position: 'absolute',
+                          top: '8px',
+                          right: '8px',
+                          fontSize: '10px'
+                        }}
+                      >
+                        {getStudyDateLabel(deck)}
+                      </Badge>
+                    )}
+                    
                     <Heading size="4">{deck.name}</Heading>
                     <Text color="gray" size="3">{deck.description}</Text>
                     <Badge variant="soft" size="1">
@@ -469,7 +506,12 @@ function App() {
 
             {/* Live EEG visualization */}
             <Box mt="6">
-              <EEGVisualization isStudying={true} currentCard={currentCard} studyStats={studyStats} />
+              <EEGVisualization 
+                isStudying={true} 
+                currentCard={currentCard} 
+                studyStats={studyStats}
+                lastCognitiveLoad={lastCognitiveLoad}
+              />
             </Box>
           </Box>
         )}
