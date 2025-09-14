@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Theme, Button, Card, Text, Heading, TextField, TextArea, Select, Flex, Box, Grid, Badge, IconButton, Dialog } from '@radix-ui/themes'
 import { PlusIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons'
-import { FaCircleNodes } from 'react-icons/fa6'
+import { SiAmazonluna } from 'react-icons/si'
 import { Welcome } from './components/Welcome'
 import { TrainingWizard } from './components/TrainingWizard'
 import './App.css'
@@ -135,7 +135,7 @@ function App() {
           zIndex: 1000
         }}>
           <Flex align="center" gap="2" style={{ cursor: 'pointer' }} onClick={() => setCurrentPage('welcome')}>
-            <FaCircleNodes 
+            <SiAmazonluna 
               size={24} 
               style={{ color: 'var(--accent-9)' }}
             />

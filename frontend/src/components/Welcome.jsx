@@ -1,5 +1,5 @@
 import { Button, Flex, Box, Heading, Text } from '@radix-ui/themes';
-import { FaCircleNodes } from 'react-icons/fa6';
+import { SiAmazonluna } from 'react-icons/si';
 import { AuroraText } from './AuroraText';
 
 export function Welcome({ onGetStarted }) {
@@ -21,7 +21,7 @@ export function Welcome({ onGetStarted }) {
         zIndex: 10
       }}>
         <Flex align="center" gap="2">
-          <FaCircleNodes 
+          <SiAmazonluna 
             size={24} 
             style={{ color: 'var(--accent-9)' }}
           />

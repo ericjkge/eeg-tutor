@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Button, Flex, Box, Heading, Text, Progress, Card } from '@radix-ui/themes';
-import { FaCircleNodes } from 'react-icons/fa6';
+import { useState, useEffect } from 'react';
+import { Button, Flex, Box, Heading, Text, Progress, Card, Spinner, Avatar } from '@radix-ui/themes';
+import { FaBrain, FaCircleCheck } from 'react-icons/fa6';
+import { SiAmazonluna } from 'react-icons/si';
 
 const stages = [
   { id: 1, name: 'Connect', title: 'Connect Your Device' },
@@ -9,6 +10,44 @@ const stages = [
 ];
 
 function ConnectStage({ onNext }) {
+  const [connectionStatus, setConnectionStatus] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Start EEG service when component mounts
+    const startEEGService = async () => {
+      try {
+        await fetch('http://localhost:8000/eeg/start', { method: 'POST' });
+      } catch (error) {
+        console.error('Failed to start EEG service:', error);
+      }
+    };
+
+    startEEGService();
+
+    // Poll for connection status
+    const pollStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/eeg/status');
+        const status = await response.json();
+        setConnectionStatus(status);
+        setIsConnected(status.is_connected);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Failed to check EEG status:', error);
+        setIsLoading(false);
+      }
+    };
+
+    // Poll every 500ms for connection status
+    const interval = setInterval(pollStatus, 500);
+    pollStatus(); // Initial call
+
+    return () => clearInterval(interval);
+  }, []);
+
+
   return (
     <Card size="4" style={{ maxWidth: '600px', margin: '0 auto' }}>
       <Flex direction="column" gap="4" align="center">
@@ -17,20 +56,51 @@ function ConnectStage({ onNext }) {
           Connect your EEG headset to begin capturing brainwave data. 
           Make sure your device is properly positioned and powered on.
         </Text>
-        <Box style={{ 
-          height: '200px', 
+
+        <Card style={{ 
+          height: '240px', 
           width: '100%', 
-          backgroundColor: 'var(--gray-3)', 
+          backgroundColor: 'var(--gray-2)', 
           borderRadius: 'var(--radius-3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
+          padding: '20px'
         }}>
-          <Text size="3" color="gray" style={{ fontStyle: 'italic' }}>
-            Device connection interface will go here
-          </Text>
-        </Box>
-        <Button size="3" onClick={onNext} style={{ height: '40px' }}>
+          <Flex direction="column" align="center" justify="center" gap="4" style={{ height: '100%' }}>
+            {isLoading ? (
+              <>
+                <Spinner size="3" />
+                <Text size="3" color="gray">Initializing EEG service...</Text>
+              </>
+            ) : isConnected ? (
+              <>
+                <FaCircleCheck 
+                  size={60} 
+                  style={{ color: 'var(--green-9)' }}
+                />
+                <Text size="4" weight="medium" color="green">Device Connected!</Text>
+                <Text size="2" color="gray" style={{ textAlign: 'center' }}>
+                  Sample Rate: {connectionStatus?.sample_rate || 0} Hz<br/>
+                  Data Points: {connectionStatus?.data_count || 0}
+                </Text>
+              </>
+              ) : (
+                <>
+                  <Spinner size="3" />
+                  <Text size="4" weight="medium" color="gray">Waiting for EEG device...</Text>
+                  <Text size="2" color="gray" style={{ textAlign: 'center' }}>
+                    Make sure your Muse streaming app is<br/>
+                    configured to send OSC to <strong>localhost:8001</strong>
+                  </Text>
+                </>
+              )}
+          </Flex>
+        </Card>
+
+        <Button 
+          size="3" 
+          onClick={onNext} 
+          disabled={!isConnected}
+          style={{ height: '40px' }}
+        >
           Continue to Calibration
         </Button>
       </Flex>
@@ -144,7 +214,7 @@ export function TrainingWizard({ onComplete, onGoHome }) {
         zIndex: 1000
       }}>
         <Flex align="center" gap="2" style={{ cursor: 'pointer' }} onClick={onGoHome}>
-          <FaCircleNodes 
+          <SiAmazonluna 
             size={24} 
             style={{ color: 'var(--accent-9)' }}
           />

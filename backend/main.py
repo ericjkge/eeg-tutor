@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json
 import os
+from eeg_service import eeg_service
 
 app = FastAPI(title="Synapse API")
 
@@ -144,6 +145,47 @@ async def delete_deck(deck_id: int):
     cards_data = [c for c in cards_data if c["deck_id"] != deck_id]
     return {"message": "Deck deleted"}
 
+# EEG Connection Endpoints
+@app.get("/eeg/status")
+async def get_eeg_status():
+    """Get EEG device connection status"""
+    return eeg_service.get_connection_status()
+
+@app.get("/eeg/data")
+async def get_eeg_data(seconds: float = 1.0):
+    """Get live EEG data from the last N seconds"""
+    return {
+        "data": eeg_service.get_live_data(seconds),
+        "status": eeg_service.get_connection_status()
+    }
+
+@app.post("/eeg/start")
+async def start_eeg_service():
+    """Start the EEG OSC server"""
+    success = eeg_service.start_server()
+    return {
+        "success": success,
+        "message": "EEG service started" if success else "Failed to start EEG service",
+        "status": eeg_service.get_connection_status()
+    }
+
+@app.post("/eeg/stop")
+async def stop_eeg_service():
+    """Stop the EEG OSC server"""
+    eeg_service.stop_server()
+    return {
+        "success": True,
+        "message": "EEG service stopped",
+        "status": eeg_service.get_connection_status()
+    }
+
 if __name__ == "__main__":
     import uvicorn
+    
+    # Start EEG service automatically
+    print("🧠 Starting Synapse Backend...")
+    print("🎯 Starting EEG service...")
+    eeg_service.start_server()
+    
+    print("🌐 Starting FastAPI server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
