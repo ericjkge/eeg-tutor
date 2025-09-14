@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Button, Flex, Box, Heading, Text, Progress, Card, Spinner, Avatar, Badge } from '@radix-ui/themes';
-import { FaBrain, FaCircleCheck } from 'react-icons/fa6';
+import { FaCircleCheck } from 'react-icons/fa6';
 import { SiAmazonluna } from 'react-icons/si';
 
 const stages = [
@@ -168,6 +168,7 @@ function CalibrateStage({ onNext, onPrev }) {
   const [answers, setAnswers] = useState([]);
   const [startTime, setStartTime] = useState(Date.now());
   const [sessionId, setSessionId] = useState(null);
+  
 
   useEffect(() => {
     // Load calibration tests from backend
@@ -204,13 +205,28 @@ function CalibrateStage({ onNext, onPrev }) {
   // Reset start time when moving to next question
   useEffect(() => {
     setStartTime(Date.now());
-  }, [currentTestIndex]);
+  }, [currentTestIndex, sessionId, tests]);
 
   const currentTest = tests[currentTestIndex];
   const isLastTest = currentTestIndex === tests.length - 1;
 
   const handleAnswerSelect = (choice) => {
     setSelectedAnswer(choice);
+  };
+
+  // EEG snapshot function (single latest sample)
+  const saveEEGSnapshot = async (sessionId, questionId) => {
+    try {
+      const response = await fetch(`http://localhost:8000/eeg/snapshot?session_id=${sessionId}&question_id=${questionId}`, {
+        method: 'POST'
+      });
+      const result = await response.json();
+      console.log('EEG snapshot response:', result);
+      return result.success;
+    } catch (error) {
+      console.error('Error saving EEG snapshot:', error);
+      return false;
+    }
   };
 
   const submitCalibrationData = async (allAnswers) => {
@@ -242,22 +258,17 @@ function CalibrateStage({ onNext, onPrev }) {
 
   const saveAnswer = async (record) => {
     try {
-      // Ensure we have a session; start if missing
-      let currentSessionId = sessionId;
-      if (!currentSessionId) {
-        const startResp = await fetch('http://localhost:8000/calibration/start', { method: 'POST' });
-        const startData = await startResp.json();
-        currentSessionId = startData?.session_id;
-        setSessionId(currentSessionId);
+      // Use existing session ID (should always exist by this point)
+      if (!sessionId) {
+        console.error('No session ID available when trying to save answer');
+        return false;
       }
-
-      if (!currentSessionId) return false;
 
       const resp = await fetch('http://localhost:8000/calibration/answer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          session_id: currentSessionId,
+          session_id: sessionId,
           testId: record.testId,
           question: record.question,
           difficulty: record.difficulty,
@@ -291,6 +302,11 @@ function CalibrateStage({ onNext, onPrev }) {
 
   const handleNext = async () => {
     if (selectedAnswer) {
+      // Save single latest EEG sample for this question
+      if (sessionId && currentTest?.id) {
+        await saveEEGSnapshot(sessionId, currentTest.id);
+      }
+
       // Record the answer with timestamp for EEG correlation
       const answerRecord = {
         testId: currentTest.id,

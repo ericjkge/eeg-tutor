@@ -9,7 +9,9 @@ import threading
 from datetime import datetime
 from pythonosc import dispatcher, osc_server
 from collections import deque
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+import numpy as np
+from scipy import signal
 
 class EEGService:
     def __init__(self, port=8001):
@@ -22,6 +24,9 @@ class EEGService:
         # Store recent EEG data for connection monitoring
         self.recent_data = deque(maxlen=100)  # Keep last 100 samples
         self.connection_timeout = 5.0  # Consider disconnected after 5 seconds of no data
+        
+        # Sampling rate (Muse headband typically streams at ~256 Hz)
+        self.sampling_rate = 256
         
         # OSC server components
         self.server = None
@@ -65,6 +70,8 @@ class EEGService:
                 'address': address
             }
             self.recent_data.append(sample)
+            
+            # No per-question tracking; we only keep recent samples
     
     def acc_handler(self, address, *args):
         """Handle accelerometer data"""
@@ -178,6 +185,37 @@ class EEGService:
             for sample in self.recent_data
             if sample['timestamp'] >= cutoff_time
         ]
+    
+
+    def get_latest_sample(self) -> Optional[Dict[str, Any]]:
+        """Return the average of the most recent 10 EEG samples, if any."""
+        if not self.recent_data:
+            return None
+        
+        # Get the last 10 samples (or all if fewer than 10)
+        num_samples = min(10, len(self.recent_data))
+        recent_samples = list(self.recent_data)[-num_samples:]
+        
+        if not recent_samples:
+            return None
+        
+        # Calculate averages
+        avg_tp9 = sum(sample['tp9'] for sample in recent_samples) / num_samples
+        avg_af7 = sum(sample['af7'] for sample in recent_samples) / num_samples
+        avg_af8 = sum(sample['af8'] for sample in recent_samples) / num_samples
+        avg_tp10 = sum(sample['tp10'] for sample in recent_samples) / num_samples
+        
+        # Use the timestamp of the most recent sample
+        latest_timestamp = recent_samples[-1]['timestamp']
+        
+        return {
+            'timestamp': latest_timestamp,
+            'tp9': avg_tp9,
+            'af7': avg_af7,
+            'af8': avg_af8,
+            'tp10': avg_tp10,
+            'samples_averaged': num_samples
+        }
 
 # Global EEG service instance
 eeg_service = EEGService()
