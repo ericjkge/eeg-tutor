@@ -449,6 +449,61 @@ async def save_eeg_snapshot(session_id: int, question_id: str):
     print(f"{'✅' if ok else '❌'} Snapshot save {'ok' if ok else 'failed'}")
     return {"success": ok, "message": "Saved" if ok else "Failed to save"}
 
+@app.post("/eeg/predict-cognitive-load")
+async def predict_cognitive_load_from_eeg():
+    """Get last 10 EEG samples, average them, and predict cognitive load"""
+    try:
+        # Get the averaged last 10 samples
+        sample = eeg_service.get_latest_sample()
+        
+        if not sample:
+            return {
+                "success": False,
+                "message": "No EEG data available"
+            }
+        
+        print(f"🧠 Predicting cognitive load from averaged EEG sample: tp9={sample['tp9']:.3f}, af7={sample['af7']:.3f}, af8={sample['af8']:.3f}, tp10={sample['tp10']:.3f} (avg of {sample['samples_averaged']} samples)")
+        
+        # Check if ML model is trained
+        if not cognitive_load_predictor.is_trained:
+            return {
+                "success": False,
+                "message": "ML model not trained yet. Please complete calibration and training first."
+            }
+        
+        # Make single prediction using the averaged sample
+        prediction_result = cognitive_load_predictor.predict_single(
+            sample['tp9'], sample['af7'], sample['af8'], sample['tp10']
+        )
+        
+        if 'error' in prediction_result:
+            return {
+                "success": False,
+                "error": prediction_result['error']
+            }
+        
+        print(f"✅ Cognitive load prediction: {prediction_result['difficulty_label']} (level {prediction_result['difficulty_level']}, confidence: {prediction_result['confidence']:.3f})")
+        
+        return {
+            "success": True,
+            "prediction": prediction_result,
+            "eeg_sample": {
+                "tp9": sample['tp9'],
+                "af7": sample['af7'], 
+                "af8": sample['af8'],
+                "tp10": sample['tp10'],
+                "samples_averaged": sample['samples_averaged'],
+                "timestamp": sample['timestamp']
+            }
+        }
+        
+    except Exception as e:
+        print(f"❌ Error predicting cognitive load: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 # ML Model Endpoints
 @app.get("/ml/status")
 async def get_ml_model_status():

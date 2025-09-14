@@ -20,10 +20,13 @@ function App() {
   const [newDeck, setNewDeck] = useState({ name: '', description: '' })
   const [newCard, setNewCard] = useState({ front: '', back: '', deck_id: 1 })
   const [showCreateDeckForm, setShowCreateDeckForm] = useState(false)
+  const [cardStartTime, setCardStartTime] = useState(null)
+  const [studyStats, setStudyStats] = useState({ total_cards_studied: 0 })
 
-  // Fetch decks on component mount
+  // Fetch decks and study stats on component mount
   useEffect(() => {
     fetchDecks()
+    fetchStudyStats()
   }, [])
 
   const fetchDecks = async () => {
@@ -33,6 +36,39 @@ function App() {
       setDecks(data)
     } catch (error) {
       console.error('Failed to fetch decks:', error)
+    }
+  }
+
+  const fetchStudyStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/study/stats`)
+      const data = await response.json()
+      if (data.success) {
+        setStudyStats(data.stats)
+      }
+    } catch (error) {
+      console.error('Failed to fetch study stats:', error)
+    }
+  }
+
+  const recordCardReview = async (cardId, deckId, responseTime) => {
+    try {
+      const response = await fetch(`${API_BASE}/study/review`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          card_id: cardId,
+          deck_id: deckId,
+          response_time_seconds: responseTime
+        })
+      })
+      const data = await response.json()
+      if (data.success) {
+        // Refresh study stats after recording review
+        fetchStudyStats()
+      }
+    } catch (error) {
+      console.error('Failed to record card review:', error)
     }
   }
 
@@ -77,15 +113,40 @@ function App() {
     setCurrentCard(deck.cards[0] || null)
     setShowAnswer(false)
     setActiveTab('study')
+    setCardStartTime(Date.now()) // Start timing the first card
   }
 
-  const nextCard = () => {
+  const nextCard = async () => {
     if (!selectedDeck || !selectedDeck.cards) return
+    
+    // Record the current card review if we have timing data
+    if (currentCard && cardStartTime) {
+      const responseTime = (Date.now() - cardStartTime) / 1000 // Convert to seconds
+      await recordCardReview(currentCard.id, selectedDeck.id, responseTime)
+      
+      // Get cognitive load prediction from last 10 EEG samples
+      try {
+        const cogLoadResponse = await fetch(`${API_BASE}/eeg/predict-cognitive-load`, {
+          method: 'POST'
+        });
+        const cogLoadData = await cogLoadResponse.json();
+        
+        if (cogLoadData.success) {
+          console.log('🧠 Cognitive load prediction:', cogLoadData.prediction);
+          // TODO: Store this prediction to show on next card
+        } else {
+          console.log('⚠️ Could not predict cognitive load:', cogLoadData.message);
+        }
+      } catch (error) {
+        console.error('❌ Error getting cognitive load prediction:', error);
+      }
+    }
     
     const nextIndex = (cardIndex + 1) % selectedDeck.cards.length
     setCardIndex(nextIndex)
     setCurrentCard(selectedDeck.cards[nextIndex])
     setShowAnswer(false)
+    setCardStartTime(Date.now()) // Start timing the new card
   }
 
   const prevCard = () => {
@@ -95,6 +156,7 @@ function App() {
     setCardIndex(prevIndex)
     setCurrentCard(selectedDeck.cards[prevIndex])
     setShowAnswer(false)
+    setCardStartTime(Date.now()) // Reset timing for the previous card
   }
 
   const flipCard = () => {
@@ -347,7 +409,7 @@ function App() {
               <Card size="3">
                 <Flex direction="column" align="center" gap="2">
                   <Text size="3" color="gray" weight="medium">Cards Studied Today</Text>
-                  <Heading size="8" color="blue">0</Heading>
+                  <Heading size="8" color="blue">{studyStats?.total_cards_studied || 0}</Heading>
                 </Flex>
               </Card>
             </Grid>
@@ -407,7 +469,7 @@ function App() {
 
             {/* Live EEG visualization */}
             <Box mt="6">
-              <EEGVisualization isStudying={true} />
+              <EEGVisualization isStudying={true} currentCard={currentCard} studyStats={studyStats} />
             </Box>
           </Box>
         )}

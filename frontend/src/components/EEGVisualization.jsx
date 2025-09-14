@@ -25,7 +25,7 @@ ChartJS.register(
 
 const API_BASE = 'http://localhost:8000';
 
-export function EEGVisualization({ isStudying = false }) {
+export function EEGVisualization({ isStudying = false, currentCard = null, studyStats = { total_cards_studied: 0 } }) {
   const [eegData, setEegData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [isLoading, setIsLoading] = useState(true);
@@ -33,11 +33,11 @@ export function EEGVisualization({ isStudying = false }) {
   const startTimeRef = useRef(null);
 
   useEffect(() => {
-    let intervalId;
+    let eegIntervalId;
     
     if (isStudying) {
       // Poll for EEG data every 500ms when studying
-      intervalId = setInterval(fetchEEGData, 500);
+      eegIntervalId = setInterval(fetchEEGData, 500);
       fetchEEGData(); // Initial fetch
     } else {
       // Single fetch when not studying
@@ -45,7 +45,7 @@ export function EEGVisualization({ isStudying = false }) {
     }
 
     return () => {
-      if (intervalId) clearInterval(intervalId);
+      if (eegIntervalId) clearInterval(eegIntervalId);
     };
   }, [isStudying]);
 
@@ -91,6 +91,28 @@ export function EEGVisualization({ isStudying = false }) {
       case 'disconnected': return 'Not Connected';
       case 'error': return 'Connection Error';
       default: return 'Unknown';
+    }
+  };
+
+  const getLastStudiedTime = () => {
+    if (!currentCard || !currentCard.last_reviewed) {
+      return 'Never';
+    }
+    
+    try {
+      const lastReviewed = new Date(currentCard.last_reviewed);
+      const now = new Date();
+      const diffMs = now - lastReviewed;
+      const diffMinutes = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffMinutes < 1) return 'Just now';
+      if (diffMinutes < 60) return `${diffMinutes}m`;
+      if (diffHours < 24) return `${diffHours}h`;
+      return `${diffDays}d`;
+    } catch (error) {
+      return 'Unknown';
     }
   };
 
@@ -289,14 +311,14 @@ export function EEGVisualization({ isStudying = false }) {
               <Flex gap="2" style={{ height: '110px' }}>
                 <Card size="2" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Flex direction="column" gap="1" align="center">
-                    <Text size="4" weight="bold" color="blue">24</Text>
+                    <Text size="4" weight="bold" color="blue">{studyStats?.total_cards_studied || 0}</Text>
                     <Text size="1" color="gray">cards today</Text>
                   </Flex>
                 </Card>
                 
                 <Card size="2" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Flex direction="column" gap="1" align="center">
-                    <Text size="4" weight="bold" color="green">2m</Text>
+                    <Text size="4" weight="bold" color="green">{getLastStudiedTime()}</Text>
                     <Text size="1" color="gray">ago</Text>
                   </Flex>
                 </Card>
