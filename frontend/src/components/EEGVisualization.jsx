@@ -263,78 +263,122 @@ export function EEGVisualization({ isStudying = false }) {
 
   return (
     <Card size="3">
-      <Flex direction="column" gap="3">
-        <Flex justify="between" align="center">
-          <Heading size="4">Brain Activity</Heading>
-          <Badge color={getConnectionStatusColor()} variant="soft">
-            {getConnectionStatusText()}
-          </Badge>
-        </Flex>
+        <Flex direction="column" gap="3">
+          <Flex justify="between" align="center">
+            <Heading size="4">Study Session Monitor</Heading>
+            <Badge color={getConnectionStatusColor()} variant="soft">
+              {getConnectionStatusText()}
+            </Badge>
+          </Flex>
 
-        {isLoading ? (
-          <Box style={{ 
-            height: 300, 
-            backgroundColor: 'var(--gray-3)', 
-            borderRadius: 'var(--radius-2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Text size="3" color="gray">Loading EEG data...</Text>
-          </Box>
-        ) : connectionStatus === 'disconnected' ? (
-          <Box style={{ 
-            height: 300, 
-            backgroundColor: 'var(--gray-3)', 
-            borderRadius: 'var(--radius-2)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px'
-          }}>
-            <Text size="3" color="gray">No EEG device connected</Text>
-            <Text size="2" color="gray" style={{ textAlign: 'center' }}>
-              Connect your Muse headband to see live brain activity
-            </Text>
-          </Box>
-        ) : !chartData ? (
-          <Box style={{ 
-            height: 300, 
-            backgroundColor: 'var(--gray-3)', 
-            borderRadius: 'var(--radius-2)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Text size="3" color="gray">Waiting for EEG data...</Text>
-          </Box>
-        ) : (
-          <Box style={{ 
-            height: 300,
-            position: 'relative',
-            backgroundColor: 'white',
-            borderRadius: 'var(--radius-2)',
-            border: '1px solid var(--gray-6)',
-            padding: '10px'
-          }}>
-            <Line 
-              ref={chartRef}
-              data={chartData} 
-              options={chartOptions}
-            />
-            {eegData && (
-              <Text size="1" color="gray" style={{ 
-                position: 'absolute', 
-                bottom: '5px', 
-                right: '10px' 
-              }}>
-                {eegData.length} samples
-              </Text>
-            )}
-          </Box>
-        )}
-      </Flex>
+          {/* Main split layout */}
+          <Flex gap="4" style={{ height: 200 }}>
+            {/* Left Half - Info Boxes */}
+            <Flex direction="column" gap="2" style={{ flex: 1 }}>
+              {/* Top Box - Cognitive Load */}
+              <Card size="2" style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Flex align="center" gap="2">
+                  <Text size="2" color="gray">Cognitive Load:</Text>
+                  <Badge color="orange" variant="soft" size="2">
+                    Medium
+                  </Badge>
+                </Flex>
+              </Card>
+
+              {/* Bottom Boxes - Stats */}
+              <Flex gap="2" style={{ height: '110px' }}>
+                <Card size="2" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Flex direction="column" gap="1" align="center">
+                    <Text size="4" weight="bold" color="blue">24</Text>
+                    <Text size="1" color="gray">cards today</Text>
+                  </Flex>
+                </Card>
+                
+                <Card size="2" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Flex direction="column" gap="1" align="center">
+                    <Text size="4" weight="bold" color="green">2m</Text>
+                    <Text size="1" color="gray">ago</Text>
+                  </Flex>
+                </Card>
+              </Flex>
+            </Flex>
+
+            {/* Right Half - EEG Visualization */}
+            <Box style={{ flex: 1 }}>
+              <Card size="2" style={{ height: '100%' }}>
+                <Flex direction="column" gap="1" style={{ height: '100%' }}>
+                  <Flex align="center" justify="center" style={{ minHeight: '30px' }}>
+                    <Text size="2" color="gray" weight="medium">Live EEG Signal</Text>
+                  </Flex>
+                  
+                  {isLoading ? (
+                    <Box style={{ 
+                      height: '160px',
+                      backgroundColor: 'var(--gray-3)', 
+                      borderRadius: 'var(--radius-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Text size="2" color="gray">Loading EEG data...</Text>
+                    </Box>
+                  ) : connectionStatus === 'disconnected' ? (
+                    <Box style={{ 
+                      height: '160px',
+                      backgroundColor: 'var(--gray-3)', 
+                      borderRadius: 'var(--radius-2)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}>
+                      <Text size="2" color="gray">No EEG device connected</Text>
+                      <Text size="1" color="gray" style={{ textAlign: 'center' }}>
+                        Connect your Muse headband
+                      </Text>
+                    </Box>
+                  ) : !chartData ? (
+                    <Box style={{ 
+                      height: '160px',
+                      backgroundColor: 'var(--gray-3)', 
+                      borderRadius: 'var(--radius-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <Text size="2" color="gray">Waiting for EEG data...</Text>
+                    </Box>
+                  ) : (
+                    <Box style={{ 
+                      height: '160px',
+                      position: 'relative',
+                      backgroundColor: 'white',
+                      borderRadius: 'var(--radius-2)',
+                      border: '1px solid var(--gray-6)',
+                      padding: '8px'
+                    }}>
+                      <Line 
+                        ref={chartRef}
+                        data={chartData} 
+                        options={chartOptions}
+                      />
+                      {eegData && (
+                        <Text size="1" color="gray" style={{ 
+                          position: 'absolute', 
+                          bottom: '3px', 
+                          right: '8px' 
+                        }}>
+                          {eegData.length} samples
+                        </Text>
+                      )}
+                    </Box>
+                  )}
+                </Flex>
+              </Card>
+            </Box>
+          </Flex>
+        </Flex>
     </Card>
   );
 }
