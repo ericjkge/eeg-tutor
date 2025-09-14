@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Flex, Box, Heading, Text, Progress, Card, Spinner, Avatar } from '@radix-ui/themes';
+import { Button, Flex, Box, Heading, Text, Progress, Card, Spinner, Avatar, Badge } from '@radix-ui/themes';
 import { FaBrain, FaCircleCheck } from 'react-icons/fa6';
 import { SiAmazonluna } from 'react-icons/si';
 
@@ -150,7 +150,7 @@ function ConnectStage({ onNext }) {
         <Button 
           size="3" 
           onClick={onNext} 
-          disabled={!isConnected}
+          disabled={false}
           style={{ height: '40px' }}
         >
           Continue to Calibration
@@ -161,33 +161,241 @@ function ConnectStage({ onNext }) {
 }
 
 function CalibrateStage({ onNext, onPrev }) {
+  const [tests, setTests] = useState([]);
+  const [currentTestIndex, setCurrentTestIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [answers, setAnswers] = useState([]);
+  const [startTime, setStartTime] = useState(Date.now());
+  const [sessionId, setSessionId] = useState(null);
+
+  useEffect(() => {
+    // Load calibration tests from backend
+    const loadTests = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/calibration/tests');
+        const data = await response.json();
+        if (data.tests) {
+          setTests(data.tests);
+          setIsLoading(false);
+          setStartTime(Date.now()); // Reset start time when question loads
+          // Start a calibration session for per-question saving
+          try {
+            const startResp = await fetch('http://localhost:8000/calibration/start', {
+              method: 'POST'
+            });
+            const startData = await startResp.json();
+            if (startData?.session_id) {
+              setSessionId(startData.session_id);
+            }
+          } catch (e) {
+            console.error('Failed to start calibration session:', e);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load calibration tests:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadTests();
+  }, []);
+
+  // Reset start time when moving to next question
+  useEffect(() => {
+    setStartTime(Date.now());
+  }, [currentTestIndex]);
+
+  const currentTest = tests[currentTestIndex];
+  const isLastTest = currentTestIndex === tests.length - 1;
+
+  const handleAnswerSelect = (choice) => {
+    setSelectedAnswer(choice);
+  };
+
+  const submitCalibrationData = async (allAnswers) => {
+    try {
+      const response = await fetch('http://localhost:8000/calibration/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          responses: allAnswers,
+          sessionData: {
+            userAgent: navigator.userAgent,
+            completedAt: new Date().toISOString()
+          }
+        })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        console.log('✅ Calibration data saved to database:', result.message);
+      } else {
+        console.error('❌ Failed to save calibration data:', result);
+      }
+    } catch (error) {
+      console.error('❌ Error submitting calibration data:', error);
+    }
+  };
+
+  const saveAnswer = async (record) => {
+    try {
+      // Ensure we have a session; start if missing
+      let currentSessionId = sessionId;
+      if (!currentSessionId) {
+        const startResp = await fetch('http://localhost:8000/calibration/start', { method: 'POST' });
+        const startData = await startResp.json();
+        currentSessionId = startData?.session_id;
+        setSessionId(currentSessionId);
+      }
+
+      if (!currentSessionId) return false;
+
+      const resp = await fetch('http://localhost:8000/calibration/answer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: currentSessionId,
+          testId: record.testId,
+          question: record.question,
+          difficulty: record.difficulty,
+          selectedAnswer: record.selectedAnswer,
+          correctAnswer: record.correctAnswer,
+          isCorrect: record.isCorrect,
+          timestamp: record.timestamp,
+          timeSpent: record.timeSpent
+        })
+      });
+      const result = await resp.json();
+      if (!result?.success) {
+        console.error('Failed to save answer:', result);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Error saving answer:', e);
+      return false;
+    }
+  };
+
+  const completeSession = async () => {
+    try {
+      if (!sessionId) return;
+      await fetch(`http://localhost:8000/calibration/complete?session_id=${sessionId}`, { method: 'POST' });
+    } catch (e) {
+      console.error('Error completing session:', e);
+    }
+  };
+
+  const handleNext = async () => {
+    if (selectedAnswer) {
+      // Record the answer with timestamp for EEG correlation
+      const answerRecord = {
+        testId: currentTest.id,
+        question: currentTest.question,
+        difficulty: currentTest.difficulty,
+        selectedAnswer,
+        correctAnswer: currentTest.answer,
+        isCorrect: selectedAnswer === currentTest.answer,
+        timestamp: Date.now(),
+        timeSpent: Date.now() - startTime
+      };
+      
+      setAnswers([...answers, answerRecord]);
+      
+      if (isLastTest) {
+        // Save final answer and complete the session
+        await saveAnswer(answerRecord);
+        await completeSession();
+        onNext();
+      } else {
+        // Save answer and move to next test
+        await saveAnswer(answerRecord);
+        setCurrentTestIndex(currentTestIndex + 1);
+        setSelectedAnswer(null);
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <Card size="4" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <Flex direction="column" gap="4" align="center">
+          <Heading size="6">Loading Calibration Tests...</Heading>
+          <Spinner size="3" />
+        </Flex>
+      </Card>
+    );
+  }
+
+  if (!currentTest) {
+    return (
+      <Card size="4" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <Flex direction="column" gap="4" align="center">
+          <Heading size="6">Error</Heading>
+          <Text>Failed to load calibration tests.</Text>
+          <Button variant="outline" onClick={onPrev}>Back</Button>
+        </Flex>
+      </Card>
+    );
+  }
+
   return (
     <Card size="4" style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <Flex direction="column" gap="4" align="center">
-        <Heading size="6">Calibrate Your Brainwaves</Heading>
-        <Text size="4" color="gray" style={{ textAlign: 'center' }}>
-          Follow the calibration exercises to establish your baseline brainwave patterns.
-          This helps us understand your unique neural signatures.
-        </Text>
+      <Flex direction="column" gap="4">
+        {/* Header */}
+        <Flex justify="between" align="center">
+          <Heading size="6">Calibration</Heading>
+          <Text size="2" color="gray">
+            {currentTestIndex + 1} of {tests.length}
+          </Text>
+        </Flex>
+
+        {/* Question */}
         <Box style={{ 
-          height: '200px', 
-          width: '100%', 
-          backgroundColor: 'var(--gray-3)', 
+          padding: '16px',
+          backgroundColor: 'var(--gray-2)',
           borderRadius: 'var(--radius-3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
+          textAlign: 'center'
         }}>
-          <Text size="3" color="gray" style={{ fontStyle: 'italic' }}>
-            Calibration exercises will go here
+          <Text size="5" weight="medium">
+            {currentTest.question}
           </Text>
         </Box>
+
+        {/* Answer Choices */}
+        <Flex direction="column" gap="3">
+          {currentTest.choices.map((choice, index) => (
+            <Button
+              key={index}
+              variant={selectedAnswer === choice ? "solid" : "outline"}
+              size="3"
+              onClick={() => handleAnswerSelect(choice)}
+              style={{ 
+                justifyContent: 'flex-start',
+                padding: '16px',
+                height: 'auto'
+              }}
+            >
+              <Text size="4">{choice}</Text>
+            </Button>
+          ))}
+        </Flex>
+
+        {/* Navigation */}
         <Flex gap="3">
           <Button variant="outline" onClick={onPrev} style={{ height: '40px' }}>
             Back
           </Button>
-          <Button size="3" onClick={onNext} style={{ height: '40px' }}>
-            Continue to Training
+          <Button 
+            size="3" 
+            onClick={handleNext}
+            disabled={!selectedAnswer}
+            style={{ flex: 1, height: '40px' }}
+          >
+            {isLastTest ? 'Complete Calibration' : 'Next Question'}
           </Button>
         </Flex>
       </Flex>
