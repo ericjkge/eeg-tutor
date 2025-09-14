@@ -4,6 +4,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json
 import os
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 from eeg_service import eeg_service
 from database import get_db_connection, save_eeg_sample
 from ml_service import cognitive_load_predictor
@@ -15,7 +19,7 @@ app = FastAPI(title="Synapse API")
 # CORS middleware for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite default port
+    allow_origins=["http://localhost:5173", "https://*.onrender.com", "*"],  # Allow Render and local
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
