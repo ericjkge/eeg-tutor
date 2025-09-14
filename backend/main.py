@@ -6,6 +6,7 @@ import json
 import os
 from eeg_service import eeg_service
 from database import get_db_connection, save_eeg_sample
+from ml_service import cognitive_load_predictor
 import uuid
 import time
 
@@ -326,6 +327,254 @@ async def save_eeg_snapshot(session_id: int, question_id: str):
     ok = save_eeg_sample(str(session_id), question_id, sample)
     print(f"{'✅' if ok else '❌'} Snapshot save {'ok' if ok else 'failed'}")
     return {"success": ok, "message": "Saved" if ok else "Failed to save"}
+
+# ML Model Endpoints
+@app.get("/ml/status")
+async def get_ml_model_status():
+    """Get ML model status and information"""
+    try:
+        info = cognitive_load_predictor.get_model_info()
+        return {
+            "success": True,
+            "model_info": clean_metrics_for_json(info)
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/ml/training-data")
+async def get_training_data_preview():
+    """Get a preview of available training data"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get calibration session count
+            cursor.execute("SELECT COUNT(*) as count FROM calibration_sessions")
+            session_count = cursor.fetchone()['count']
+            
+            # Get response count by difficulty
+            cursor.execute("""
+                SELECT difficulty, COUNT(*) as count 
+                FROM calibration_responses 
+                GROUP BY difficulty
+            """)
+            difficulty_counts = {row['difficulty']: row['count'] for row in cursor.fetchall()}
+            
+            # Get EEG sample count
+            cursor.execute("SELECT COUNT(*) as count FROM eeg_samples")
+            eeg_count = cursor.fetchone()['count']
+            
+            # Get recent samples with joined data
+            cursor.execute("""
+                SELECT 
+                    e.session_id,
+                    e.question_id,
+                    e.tp9, e.af7, e.af8, e.tp10,
+                    r.difficulty,
+                    r.is_correct,
+                    r.response_time_ms
+                FROM eeg_samples e
+                INNER JOIN calibration_responses r 
+                    ON e.session_id = r.session_id AND e.question_id = r.test_id
+                ORDER BY e.created_at DESC
+                LIMIT 10
+            """)
+            recent_samples = [dict(row) for row in cursor.fetchall()]
+            
+        return {
+            "success": True,
+            "summary": {
+                "total_sessions": session_count,
+                "total_eeg_samples": eeg_count,
+                "difficulty_distribution": difficulty_counts,
+                "total_training_pairs": len(recent_samples) if recent_samples else 0
+            },
+            "recent_samples": recent_samples[:5]  # Show first 5 for preview
+        }
+    except Exception as e:
+        print(f"❌ Error getting training data preview: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class TrainModelRequest(BaseModel):
+    validation_split: Optional[float] = 0.2
+    save_as_new_version: Optional[bool] = True
+
+def clean_metrics_for_json(metrics):
+    """Clean metrics by replacing NaN and infinity values with None"""
+    import math
+    
+    def clean_value(value):
+        if isinstance(value, float):
+            if math.isnan(value) or math.isinf(value):
+                return None
+        elif isinstance(value, dict):
+            return {k: clean_value(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return [clean_value(v) for v in value]
+        return value
+    
+    return clean_value(metrics)
+
+@app.post("/ml/train")
+async def train_model(request: TrainModelRequest = TrainModelRequest()):
+    """Train the cognitive load prediction model"""
+    try:
+        print("🧠 Training model request received")
+        
+        # Train the model
+        training_result = cognitive_load_predictor.train_model(
+            validation_split=request.validation_split
+        )
+        
+        if not training_result.get('success', False):
+            return {
+                "success": False,
+                "error": training_result.get('error', 'Training failed'),
+                "metrics": clean_metrics_for_json(training_result)
+            }
+        
+        # Save the trained model
+        save_success = cognitive_load_predictor.save_model(
+            save_as_new_version=request.save_as_new_version
+        )
+        
+        if not save_success:
+            print("⚠️ Model training succeeded but saving failed")
+        
+        print(f"✅ Model training completed. Samples: {training_result['n_samples']}, R²: {training_result.get('test_r2', 'N/A')}")
+        
+        return {
+            "success": True,
+            "message": "Model trained successfully",
+            "training_metrics": clean_metrics_for_json(training_result),
+            "model_saved": save_success,
+            "model_version": cognitive_load_predictor.model_version
+        }
+        
+    except Exception as e:
+        print(f"❌ Error training model: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class PredictRequest(BaseModel):
+    eeg_data: List[dict]  # List of EEG samples with tp9, af7, af8, tp10
+
+@app.post("/ml/predict")
+async def predict_cognitive_load(request: PredictRequest):
+    """Predict cognitive load from EEG data"""
+    try:
+        if not cognitive_load_predictor.is_trained:
+            return {
+                "success": False,
+                "error": "Model not trained yet. Please train the model first."
+            }
+        
+        # Make prediction
+        prediction_result = cognitive_load_predictor.predict(request.eeg_data)
+        
+        return {
+            "success": True,
+            "prediction": prediction_result
+        }
+        
+    except Exception as e:
+        print(f"❌ Error making prediction: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class PredictSingleRequest(BaseModel):
+    tp9: float
+    af7: float
+    af8: float
+    tp10: float
+
+@app.post("/ml/predict-single")
+async def predict_single_sample(request: PredictSingleRequest):
+    """Predict cognitive load from a single EEG sample"""
+    try:
+        if not cognitive_load_predictor.is_trained:
+            return {
+                "success": False,
+                "error": "Model not trained yet. Please train the model first."
+            }
+        
+        # Make single prediction
+        prediction_result = cognitive_load_predictor.predict_single(
+            request.tp9, request.af7, request.af8, request.tp10
+        )
+        
+        if 'error' in prediction_result:
+            return {
+                "success": False,
+                "error": prediction_result['error']
+            }
+        
+        return {
+            "success": True,
+            "prediction": prediction_result
+        }
+        
+    except Exception as e:
+        print(f"❌ Error making single prediction: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.get("/ml/models")
+async def list_model_versions():
+    """List all available model versions"""
+    try:
+        models = cognitive_load_predictor.list_available_models()
+        return {
+            "success": True,
+            "models": models,
+            "current_version": cognitive_load_predictor.model_version
+        }
+    except Exception as e:
+        print(f"❌ Error listing models: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class LoadModelRequest(BaseModel):
+    version: int
+
+@app.post("/ml/load-model")
+async def load_model_version(request: LoadModelRequest):
+    """Load a specific model version"""
+    try:
+        success = cognitive_load_predictor.load_model(version=request.version)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"Model v{request.version} loaded successfully",
+                "current_version": cognitive_load_predictor.model_version
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Failed to load model v{request.version}"
+            }
+            
+    except Exception as e:
+        print(f"❌ Error loading model: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 
 if __name__ == "__main__":

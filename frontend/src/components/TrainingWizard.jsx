@@ -420,35 +420,307 @@ function CalibrateStage({ onNext, onPrev }) {
 }
 
 function TrainStage({ onNext, onPrev }) {
+  const [trainingData, setTrainingData] = useState(null);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingComplete, setTrainingComplete] = useState(false);
+  const [trainingResult, setTrainingResult] = useState(null);
+
+  useEffect(() => {
+    // Load training data preview
+    const loadTrainingData = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/ml/training-data');
+        const data = await response.json();
+        if (data.success) {
+          setTrainingData(data);
+        } else {
+          console.error('Failed to load training data:', data.error);
+        }
+      } catch (error) {
+        console.error('Error loading training data:', error);
+      } finally {
+        setIsLoadingData(false);
+      }
+    };
+
+    loadTrainingData();
+  }, []);
+
+  const handleTrainModel = async () => {
+    setIsTraining(true);
+    
+    // Start training and minimum 3 second timer in parallel
+    const [result] = await Promise.all([
+      // Training API call
+      (async () => {
+        try {
+          const response = await fetch('http://localhost:8000/ml/train', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              validation_split: 0.2,
+              save_as_new_version: true
+            })
+          });
+          return await response.json();
+        } catch (error) {
+          console.error('Error training model:', error);
+          return { success: false, error: error.message };
+        }
+      })(),
+      // Minimum 3 second delay
+      new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
+
+    setTrainingResult(result);
+    
+    if (result.success) {
+      setTrainingComplete(true);
+    } else {
+      console.error('Training failed:', result.error);
+    }
+    
+    setIsTraining(false);
+  };
+
+  if (isLoadingData) {
+    return (
+      <Card size="4" style={{ maxWidth: '600px', margin: '0 auto' }}>
+        <Flex direction="column" gap="4" align="center">
+          <Heading size="6">Train the Model</Heading>
+          <Spinner size="3" />
+          <Text size="3" color="gray">Loading training data...</Text>
+        </Flex>
+      </Card>
+    );
+  }
+
   return (
     <Card size="4" style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <Flex direction="column" gap="4" align="center">
+      <Flex direction="column" gap="4">
         <Heading size="6">Train the Model</Heading>
-        <Text size="4" color="gray" style={{ textAlign: 'center' }}>
-          Complete training sessions to teach the AI model to recognize your learning states.
-          This process will improve over time with more data.
-        </Text>
-        <Box style={{ 
-          height: '200px', 
-          width: '100%', 
-          backgroundColor: 'var(--gray-3)', 
-          borderRadius: 'var(--radius-3)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}>
-          <Text size="3" color="gray" style={{ fontStyle: 'italic' }}>
-            Training interface will go here
-          </Text>
-        </Box>
-        <Flex gap="3">
-          <Button variant="outline" onClick={onPrev} style={{ height: '40px' }}>
-            Back
+        
+        {!isTraining && !trainingComplete && (
+          <>
+            {/* Data Preview */}
+            {trainingData && (
+              <Card style={{ 
+                padding: '12px',
+                backgroundColor: 'var(--gray-2)', 
+                borderRadius: 'var(--radius-3)'
+              }}>
+                <Heading size="4" style={{ marginBottom: '8px' }}>Training Data Summary</Heading>
+                <Flex direction="column" gap="2">
+                  <Flex justify="between" align="center">
+                    <Flex gap="4">
+                      <Text size="2" color="gray">Sessions: <strong>{trainingData.summary.total_sessions}</strong></Text>
+                      <Text size="2" color="gray">EEG: <strong>{trainingData.summary.total_eeg_samples}</strong></Text>
+                      <Text size="2" color="gray">Pairs: <strong>{trainingData.summary.total_training_pairs}</strong></Text>
+                    </Flex>
+                    <Flex gap="1">
+                      {Object.entries(trainingData.summary.difficulty_distribution).map(([difficulty, count]) => (
+                        <Badge key={difficulty} size="1" color={
+                          difficulty === 'easy' ? 'green' : 
+                          difficulty === 'medium' ? 'orange' : 'red'
+                        }>
+                          {difficulty}: {count}
+                        </Badge>
+                      ))}
+                    </Flex>
+                  </Flex>
+                </Flex>
+              </Card>
+            )}
+
+            {/* Recent Samples Preview */}
+            {trainingData?.recent_samples && trainingData.recent_samples.length > 0 && (
+              <Card style={{ 
+                padding: '12px',
+                backgroundColor: 'var(--gray-2)', 
+                borderRadius: 'var(--radius-3)'
+              }}>
+                <Heading size="4" style={{ marginBottom: '8px' }}>Recent EEG-Response Pairs</Heading>
+                <Flex direction="column" gap="2">
+                  {trainingData.recent_samples.slice(0, 3).map((sample, index) => (
+                    <Flex key={index} justify="between" align="center" style={{
+                      padding: '6px',
+                      backgroundColor: 'var(--gray-3)',
+                      borderRadius: 'var(--radius-2)'
+                    }}>
+                      <Flex direction="column">
+                        <Text size="2" weight="medium">
+                          Q{sample.question_id} - {sample.difficulty}
+                        </Text>
+                        <Text size="1" color="gray">
+                          EEG: {sample.tp9?.toFixed(2)}, {sample.af7?.toFixed(2)}, {sample.af8?.toFixed(2)}, {sample.tp10?.toFixed(2)}
+                        </Text>
+                      </Flex>
+                      <Badge color={sample.is_correct ? 'green' : 'red'} variant="soft">
+                        {sample.is_correct ? '✓' : '✗'}
+                      </Badge>
+                    </Flex>
+                  ))}
+                </Flex>
+              </Card>
+            )}
+          </>
+        )}
+
+        {/* Training in Progress */}
+        {isTraining && (
+          <Card style={{ 
+            height: '150px', 
+            backgroundColor: 'var(--accent-2)', 
+            borderRadius: 'var(--radius-3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <Flex direction="column" align="center" gap="4">
+              <Box style={{ position: 'relative', width: '80px', height: '80px' }}>
+                {/* Core circle */}
+                <Box style={{
+                  position: 'absolute',
+                  top: '55%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--accent-9)',
+                }} />
+                
+                {/* Pulsing rings */}
+                <Box style={{
+                  position: 'absolute',
+                  top: '55%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid var(--accent-9)',
+                  animation: 'pulse-ring 2.5s infinite',
+                  animationDelay: '0s'
+                }} />
+                
+                <Box style={{
+                  position: 'absolute',
+                  top: '55%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid var(--accent-9)',
+                  animation: 'pulse-ring 2.5s infinite',
+                  animationDelay: '-0.8s'
+                }} />
+                
+                <Box style={{
+                  position: 'absolute',
+                  top: '55%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
+                  border: '2px solid var(--accent-9)',
+                  animation: 'pulse-ring 2.5s infinite',
+                  animationDelay: '-1.6s'
+                }} />
+              </Box>
+              <Text size="4" weight="medium" style={{ color: 'var(--accent-9)' }}>Training Model...</Text>
+              <Text size="3" color="gray" style={{ textAlign: 'center' }}>
+                Analyzing your brainwave patterns and<br/>
+                learning to predict cognitive load levels
+              </Text>
+            </Flex>
+          </Card>
+        )}
+
+        {/* Training Complete */}
+        {trainingComplete && trainingResult && (
+          <Card style={{ 
+            padding: '20px',
+            backgroundColor: 'var(--accent-2)', 
+            borderRadius: 'var(--radius-3)',
+            border: '1px solid var(--accent-6)'
+          }}>
+            <Flex direction="column" align="center" gap="4">
+              <FaCircleCheck 
+                size={48} 
+                style={{ color: 'var(--accent-9)' }}
+              />
+              <Text size="4" weight="medium" style={{ color: 'var(--accent-9)' }}>
+                Model Training Complete!
+              </Text>
+              
+              {trainingResult.success && (
+                <Flex direction="column" gap="2" style={{ width: '100%' }}>
+                  <Flex justify="between">
+                    <Text size="3" color="gray">Model Version:</Text>
+                    <Badge color="blue">v{trainingResult.model_version}</Badge>
+                  </Flex>
+                  <Flex justify="between">
+                    <Text size="3" color="gray">Training Samples:</Text>
+                    <Badge variant="outline">{trainingResult.training_metrics.n_samples}</Badge>
+                  </Flex>
+                   <Flex justify="between">
+                     <Text size="3" color="gray">Test Accuracy (MAE):</Text>
+                     <Badge variant="outline">
+                       {trainingResult.training_metrics.test_mae != null ? 
+                         trainingResult.training_metrics.test_mae.toFixed(3) : 'N/A'}
+                     </Badge>
+                   </Flex>
+                  {trainingResult.training_metrics.difficulty_distribution && (
+                    <Box style={{ marginTop: '8px' }}>
+                      <Text size="3" color="gray" style={{ marginBottom: '4px' }}>Trained on:</Text>
+                      <Flex gap="2">
+                        {Object.entries(trainingResult.training_metrics.difficulty_distribution).map(([difficulty, count]) => (
+                          <Badge key={difficulty} variant="soft" color={
+                            difficulty === 'easy' ? 'green' : 
+                            difficulty === 'medium' ? 'orange' : 'red'
+                          }>
+                            {count} {difficulty}
+                          </Badge>
+                        ))}
+                      </Flex>
+                    </Box>
+                  )}
+                </Flex>
+              )}
+            </Flex>
+          </Card>
+        )}
+
+        {/* Navigation */}
+        {!trainingComplete ? (
+          <Flex gap="3">
+            <Button variant="outline" onClick={onPrev} disabled={isTraining} style={{ height: '40px' }}>
+              Back
+            </Button>
+            <Button 
+              size="3" 
+              onClick={handleTrainModel}
+              disabled={isTraining || !trainingData?.summary?.total_training_pairs}
+              style={{ flex: 1, height: '40px' }}
+            >
+              {isTraining ? 'Training...' : 'Train Model'}
+            </Button>
+          </Flex>
+        ) : (
+          <Button 
+            size="3" 
+            onClick={onNext}
+            style={{ width: '100%', height: '40px' }}
+          >
+            Continue to Practice
           </Button>
-          <Button size="3" onClick={onNext} style={{ height: '40px' }}>
-            Start Learning
-          </Button>
-        </Flex>
+        )}
       </Flex>
     </Card>
   );
