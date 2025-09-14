@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Theme, Button, Card, Text, Heading, TextField, TextArea, Select, Dialog, Flex, Box, Grid, Badge, IconButton } from '@radix-ui/themes'
+import { Theme, Button, Card, Text, Heading, TextField, TextArea, Select, Flex, Box, Grid, Badge, IconButton, Dialog } from '@radix-ui/themes'
 import { PlusIcon, PlayIcon, TrashIcon } from '@radix-ui/react-icons'
 import './App.css'
 
@@ -14,7 +14,7 @@ function App() {
   const [showAnswer, setShowAnswer] = useState(false)
   const [newDeck, setNewDeck] = useState({ name: '', description: '' })
   const [newCard, setNewCard] = useState({ front: '', back: '', deck_id: 1 })
-  const [showCreateDeckDialog, setShowCreateDeckDialog] = useState(false)
+  const [showCreateDeckForm, setShowCreateDeckForm] = useState(false)
 
   // Fetch decks on component mount
   useEffect(() => {
@@ -42,7 +42,7 @@ function App() {
       })
       await response.json()
       setNewDeck({ name: '', description: '' })
-      setShowCreateDeckDialog(false)
+      setShowCreateDeckForm(false)
       fetchDecks()
     } catch (error) {
       console.error('Failed to create deck:', error)
@@ -137,11 +137,12 @@ function App() {
           <Box>
             <Flex justify="between" align="center" mb="4">
               <Heading size="5">My Decks</Heading>
-              <Dialog.Root open={showCreateDeckDialog} onOpenChange={setShowCreateDeckDialog}>
+              <Dialog.Root open={showCreateDeckForm} onOpenChange={setShowCreateDeckForm}>
                 <Dialog.Trigger>
-                  <IconButton variant="outline" size="3">
+                  <Button variant="outline" size="3">
                     <PlusIcon width="18" height="18" />
-                  </IconButton>
+                    Add Deck
+                  </Button>
                 </Dialog.Trigger>
                 <Dialog.Content style={{ maxWidth: 450 }}>
                   <Dialog.Title>Create New Deck</Dialog.Title>
@@ -149,26 +150,40 @@ function App() {
                     Add a new deck to organize your flashcards.
                   </Dialog.Description>
                   <Flex direction="column" gap="3">
-                    <label>
+                    <Box>
                       <Text as="div" size="2" mb="1" weight="bold">
                         Deck Name
                       </Text>
-                      <TextField.Input
+                      <input
                         placeholder="Enter deck name"
                         value={newDeck.name}
                         onChange={(e) => setNewDeck({...newDeck, name: e.target.value})}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 6,
+                          border: '1px solid var(--gray-6)',
+                          fontSize: '14px'
+                        }}
                       />
-                    </label>
-                    <label>
+                    </Box>
+                    <Box>
                       <Text as="div" size="2" mb="1" weight="bold">
                         Description
                       </Text>
-                      <TextField.Input
+                      <input
                         placeholder="Enter description (optional)"
                         value={newDeck.description}
                         onChange={(e) => setNewDeck({...newDeck, description: e.target.value})}
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px',
+                          borderRadius: 6,
+                          border: '1px solid var(--gray-6)',
+                          fontSize: '14px'
+                        }}
                       />
-                    </label>
+                    </Box>
                   </Flex>
                   <Flex gap="3" mt="4" justify="end">
                     <Dialog.Close>
@@ -211,49 +226,49 @@ function App() {
           <Box style={{ maxWidth: 600, margin: '0 auto' }}>
             <Card size="3">
               <Heading size="5" mb="4">Add New Card</Heading>
-              <Flex direction="column" gap="4">
-                <label>
-                  <Text as="div" size="2" mb="2" weight="bold">
-                    Select Deck
-                  </Text>
-                  <Select.Root 
-                    value={newCard.deck_id.toString()}
-                    onValueChange={(value) => setNewCard({...newCard, deck_id: parseInt(value)})}
-                  >
-                    <Select.Trigger />
-                    <Select.Content>
-                      {decks.map(deck => (
-                        <Select.Item key={deck.id} value={deck.id.toString()}>
-                          {deck.name}
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
-                </label>
-                
-                <label>
-                  <Text as="div" size="2" mb="2" weight="bold">
-                    Front of Card
-                  </Text>
-                  <TextArea
-                    placeholder="Enter the question or prompt"
-                    value={newCard.front}
-                    onChange={(e) => setNewCard({...newCard, front: e.target.value})}
-                    rows={3}
-                  />
-                </label>
-                
-                <label>
-                  <Text as="div" size="2" mb="2" weight="bold">
-                    Back of Card
-                  </Text>
-                  <TextArea
-                    placeholder="Enter the answer or explanation"
-                    value={newCard.back}
-                    onChange={(e) => setNewCard({...newCard, back: e.target.value})}
-                    rows={3}
-                  />
-                </label>
+               <Flex direction="column" gap="4">
+                 <Box>
+                   <Text as="div" size="2" mb="2" weight="bold">
+                     Select Deck
+                   </Text>
+                   <Select.Root 
+                     value={newCard.deck_id.toString()}
+                     onValueChange={(value) => setNewCard({...newCard, deck_id: parseInt(value)})}
+                   >
+                     <Select.Trigger />
+                     <Select.Content>
+                       {decks.map(deck => (
+                         <Select.Item key={deck.id} value={deck.id.toString()}>
+                           {deck.name}
+                         </Select.Item>
+                       ))}
+                     </Select.Content>
+                   </Select.Root>
+                 </Box>
+                 
+                 <Box>
+                   <Text as="div" size="2" mb="2" weight="bold">
+                     Front of Card
+                   </Text>
+                   <TextArea
+                     placeholder="Enter the question or prompt"
+                     value={newCard.front}
+                     onChange={(e) => setNewCard({...newCard, front: e.target.value})}
+                     rows={3}
+                   />
+                 </Box>
+                 
+                 <Box>
+                   <Text as="div" size="2" mb="2" weight="bold">
+                     Back of Card
+                   </Text>
+                   <TextArea
+                     placeholder="Enter the answer or explanation"
+                     value={newCard.back}
+                     onChange={(e) => setNewCard({...newCard, back: e.target.value})}
+                     rows={3}
+                   />
+                 </Box>
                 
                 <Button onClick={createCard} size="3" style={{ marginTop: '8px' }}>
                   <PlusIcon width="16" height="16" />
@@ -362,7 +377,7 @@ function App() {
           </Box>
         )}
       </main>
-    </div>
+      </div>
     </Theme>
   )
 }
