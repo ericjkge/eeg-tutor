@@ -9,7 +9,8 @@ from database import (
     get_db_connection, save_eeg_sample, init_database, init_sample_data,
     create_deck, get_decks, get_deck, delete_deck,
     create_card, get_card, delete_card, update_card_review_data,
-    get_or_create_study_session, record_card_review, get_daily_study_stats, get_study_history
+    get_or_create_study_session, record_card_review, get_daily_study_stats, get_study_history,
+    calculate_sm2_next_review
 )
 from ml_service import cognitive_load_predictor
 import uuid
@@ -499,6 +500,34 @@ async def predict_cognitive_load_from_eeg():
         
     except Exception as e:
         print(f"❌ Error predicting cognitive load: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+class UpdateCardSchedule(BaseModel):
+    card_id: int
+    cognitive_load_level: int
+
+@app.post("/cards/update-schedule")
+async def update_card_schedule(request: UpdateCardSchedule):
+    """Update card's next review date using SM2 algorithm based on cognitive load"""
+    try:
+        success = calculate_sm2_next_review(request.card_id, request.cognitive_load_level)
+        
+        if success:
+            return {
+                "success": True,
+                "message": "Card schedule updated"
+            }
+        else:
+            return {
+                "success": False,
+                "error": "Failed to update card schedule"
+            }
+            
+    except Exception as e:
+        print(f"❌ Error updating card schedule: {e}")
         return {
             "success": False,
             "error": str(e)

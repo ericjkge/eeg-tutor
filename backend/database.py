@@ -328,6 +328,69 @@ def update_card_review_data(card_id: int, difficulty: int, repetition_count: int
         print(f"❌ Error updating card {card_id} review data: {e}")
         return False
 
+def calculate_sm2_next_review(card_id: int, cognitive_load_level: int) -> bool:
+    """Calculate next review date using SM2 algorithm based on cognitive load"""
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get current card data
+            cursor.execute("SELECT * FROM cards WHERE id = ?", (card_id,))
+            card_row = cursor.fetchone()
+            if not card_row:
+                print(f"❌ Card {card_id} not found")
+                return False
+            
+            card = dict(card_row)
+            
+            # Map cognitive load to SM2 quality (0-5 scale)
+            # cognitive_load_level: 1=easy, 2=medium, 3=hard
+            # SM2 quality: 0-2=fail, 3=hard, 4=good, 5=easy
+            quality_map = {1: 5, 2: 4, 3: 3}  # easy=5, medium=4, hard=3
+            quality = quality_map.get(cognitive_load_level, 4)
+            
+            # Get current values
+            repetition_count = card.get('repetition_count', 0)
+            easiness_factor = card.get('easiness_factor', 2.5)
+            interval_days = card.get('interval_days', 1)
+            
+            # SM2 Algorithm
+            if quality < 3:  # Failed (cognitive load too high)
+                repetition_count = 0
+                interval_days = 1
+            else:  # Passed
+                repetition_count += 1
+                if repetition_count == 1:
+                    interval_days = 1
+                elif repetition_count == 2:
+                    interval_days = 6
+                else:
+                    interval_days = int(interval_days * easiness_factor)
+            
+            # Update easiness factor
+            easiness_factor = easiness_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+            easiness_factor = max(1.3, easiness_factor)  # Minimum EF is 1.3
+            
+            # Calculate next review date
+            from datetime import datetime, timedelta
+            next_review_date = datetime.now() + timedelta(days=interval_days)
+            next_review_str = next_review_date.strftime("%Y-%m-%d")
+            
+            # Update the card
+            success = update_card_review_data(
+                card_id, cognitive_load_level, repetition_count, 
+                easiness_factor, interval_days, next_review_str
+            )
+            
+            if success:
+                print(f"📅 SM2: Card {card_id} scheduled for {next_review_str} (interval: {interval_days}d, EF: {easiness_factor:.2f})")
+            
+            return success
+            
+    except Exception as e:
+        print(f"❌ Error calculating SM2 for card {card_id}: {e}")
+        return False
+
 # Study Session Tracking Functions
 def get_or_create_study_session(deck_id: int, user_id: str = "default_user") -> Optional[int]:
     """Get or create a study session for today and the given deck"""

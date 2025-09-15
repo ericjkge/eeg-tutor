@@ -135,6 +135,29 @@ function App() {
         if (cogLoadData.success) {
           console.log('🧠 Cognitive load prediction:', cogLoadData.prediction);
           setLastCognitiveLoad(cogLoadData.prediction);
+          
+          // Update the card's next review date using SM2 algorithm
+          try {
+            const scheduleResponse = await fetch(`${API_BASE}/cards/update-schedule`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                card_id: currentCard.id,
+                cognitive_load_level: cogLoadData.prediction.difficulty_level
+              })
+            });
+            const scheduleData = await scheduleResponse.json();
+            
+            if (scheduleData.success) {
+              console.log('📅 Card schedule updated using SM2 algorithm');
+              // Refresh decks to get updated next_study_date
+              fetchDecks();
+            } else {
+              console.log('⚠️ Failed to update card schedule:', scheduleData.error);
+            }
+          } catch (error) {
+            console.error('❌ Error updating card schedule:', error);
+          }
         } else {
           console.log('⚠️ Could not predict cognitive load:', cogLoadData.message);
           setLastCognitiveLoad(null);
@@ -174,10 +197,27 @@ function App() {
   }
 
   const getStudyDateLabel = (deck) => {
-    // Hardcoded randomized dates for now
-    const randomLabels = ['Today', 'Tomorrow', '3d', '1w', 'Ready', 'Overdue'];
-    const deckIndex = deck.id % randomLabels.length;
-    return randomLabels[deckIndex];
+    if (!deck.next_study_date) {
+      return 'Ready'; // No scheduled reviews, ready to study
+    }
+    
+    try {
+      const nextStudyDate = new Date(deck.next_study_date);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const studyDay = new Date(nextStudyDate.getFullYear(), nextStudyDate.getMonth(), nextStudyDate.getDate());
+      
+      const diffMs = studyDay - today;
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) return 'Overdue';
+      if (diffDays === 0) return 'Today';
+      if (diffDays === 1) return 'Tomorrow';
+      if (diffDays <= 7) return `${diffDays}d`;
+      return `${Math.floor(diffDays / 7)}w`;
+    } catch (error) {
+      return 'Ready';
+    }
   }
 
   const getStudyDateColor = (deck) => {
